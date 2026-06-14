@@ -19,55 +19,39 @@
 ```
 项目根目录
 │
-├── .env  ← 【后端】数据库密码在这里改
+├── .env  ← 【后端】数据库密码在这里改（git 忽略）
 │
-├── backend/                    # 后端（FastAPI Python）
-│   ├── config.py               #  后端配置读取逻辑（一般不用改）
-│   ├── database.py             #  数据库连接池配置
-│   ├── main.py                 #  后端启动入口
-│   ├── migrations/             #  数据库迁移（自动创建索引）
-│   └── routers/                #  各 API 接口
+├── deploy/                    ← 【部署脚本目录】
+│   ├── setup.sh               ← 自动安装环境（Python/Node.js/MySQL/Git）
+│   ├── config.sh              ← 交互式配置（引导输入数据库信息、地址）
+│   ├── build-app.sh           ← Linux 上构建 APK
+│   └── build-app-windows.ps1  ← Windows 上构建 APK
 │
-├── frontend/                   # 前端（Vue 3 + TypeScript）
-│   ├── .env.development        ← 【前端开发】开发服务器 API 地址（已忽略，不传 git）
-│   ├── .env.production         ← 【前端打包/APP】后端 API 地址（已忽略，不传 git）
-│   ├── capacitor.config.ts     #  APP 名称、Android 配置
-│   ├── vite.config.ts          #  前端开发服务器配置
+├── start.sh                   ← 一键启动服务（自动检查配置、安装依赖、启动前后端）
+│
+├── backend/                   # 后端（FastAPI Python）
+│   ├── config.py              #  后端配置读取逻辑（一般不用改）
+│   ├── database.py            #  数据库连接池配置
+│   ├── main.py                #  后端启动入口
+│   ├── migrations/            #  数据库迁移（自动创建索引）
+│   └── routers/               #  各 API 接口
+│
+├── frontend/                  # 前端（Vue 3 + TypeScript）
+│   ├── .env.development       ← 【前端开发】开发服务器 API 地址（已忽略）
+│   ├── .env.production        ← 【前端打包/APP】后端 API 地址（已忽略）
+│   ├── capacitor.config.ts    #  APP 名称、Android 配置
+│   ├── vite.config.ts         #  前端开发服务器配置
 │   └── src/
-│       ├── api/client.ts       #  前端 API 客户端（读取 .env）
+│       ├── api/client.ts      #  前端 API 客户端（读取 .env）
 │       └── views/
 │           └── DashboardMobile.vue  #  APP 首页
-│
-└── start.sh                    #  一键启动脚本（开发用）
 ```
 
 ---
 
-## 二、后端部署（Linux 服务器）
+## 二、Linux 服务器部署（推荐：脚本一键完成）
 
-### 2.1 安装基础软件
-
-```bash
-# 更新系统
-sudo dnf update -y
-
-# 安装 Python 3.11
-sudo dnf install -y python3.11 python3.11-pip python3.11-devel
-
-# 安装 Node.js 20（前端开发用）
-curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
-sudo dnf install -y nodejs
-
-# 安装 Git
-sudo dnf install -y git
-
-# 安装 MySQL
-sudo dnf install -y mysql-server
-sudo systemctl start mysqld
-sudo systemctl enable mysqld
-```
-
-### 2.2 下载项目
+### 2.1 下载代码
 
 ```bash
 cd /opt
@@ -75,21 +59,67 @@ git clone https://github.com/SealSkyA/patient-trend.git
 cd patient-trend
 ```
 
-### 2.3 创建数据库
+### 2.2 一键安装环境 + 配置 + 启动
 
 ```bash
-# 登录 MySQL
+# 给脚本执行权限
+chmod +x deploy/*.sh start.sh
+
+# 步骤 1: 安装 Python 3.11、Node.js、MySQL、Git（方案A 失败自动切换方案B/C/D）
+bash deploy/setup.sh
+
+# 步骤 2: 交互式配置数据库、密钥、后端地址（按提示输入密码等信息）
+bash deploy/config.sh
+
+# 步骤 3: 一键启动前后端
+bash start.sh
+```
+
+**就这么简单！** 每个脚本都有：
+- 自动检测已有软件（不会重复安装）
+- 多种备选安装方案（dnf → apt → 源码编译）
+- 错误时清晰提示，告诉用户怎么处理
+- 配置时主动询问用户（数据库密码、密钥、服务器地址）
+
+### 2.3 手动部署（如脚本失败时参考）
+
+如果脚本无法正常运行，可按以下步骤手动操作：
+
+#### 安装环境
+
+```bash
+# Python 3.11
+sudo dnf install -y python3.11 python3.11-pip python3.11-devel
+# 备选: sudo apt install -y python3.11 python3.11-venv python3.11-dev
+
+# Node.js
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
+# 备选: 使用 nvm 或从 nodejs.org 下载预编译版本
+
+# MySQL
+sudo dnf install -y mysql-server
+sudo systemctl start mysqld
+sudo systemctl enable mysqld
+
+# Git
+sudo dnf install -y git
+```
+
+#### 创建数据库
+
+```bash
 mysql -u root -p
 ```
 
-进入 MySQL 后，逐行复制粘贴以下命令（**把 `你的密码` 改成你自己的密码**）：
+在 MySQL 命令行中执行：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS patient_trend
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
-CREATE USER IF NOT EXISTS 'patient_user'@'localhost'
+CREATE USER IF NOT EXISTS 'patient_user'@'localhost' 
   IDENTIFIED BY '你的密码';
 
 GRANT ALL PRIVILEGES ON patient_trend.* TO 'patient_user'@'localhost';
@@ -97,196 +127,90 @@ FLUSH PRIVILEGES;
 EXIT;
 ```
 
-验证连接是否成功：
-
+验证：
 ```bash
 mysql -u patient_user -p'你的密码' patient_trend -e "SELECT '连接成功' AS status;"
 ```
 
-如果出现 `连接成功` 四个字，数据库就没问题。
-
-### 2.4 安装后端依赖
+#### 安装后端依赖
 
 ```bash
 cd /opt/patient-trend/backend
-python3.11 -m pip install -r requirements.txt
-```
-
-如果提示 `--break-system-packages` 错误，加上参数：
-
-```bash
 python3.11 -m pip install -r requirements.txt --break-system-packages
 ```
 
-### 2.5 配置后端数据库连接
-
-**文件位置**：项目根目录下的 `.env` 文件  
-**完整路径**：`/opt/patient-trend/.env`
-
-如果文件不存在，复制模板：
+#### 创建后端配置文件
 
 ```bash
+# 在项目根目录创建 .env 文件
 cd /opt/patient-trend
-cp backend/.env.example .env
-```
 
-现在编辑它：
+# 生成密钥
+SECRET_KEY=$(openssl rand -hex 32)
 
-```bash
-vi /opt/patient-trend/.env
-```
-
-按 `i` 键进入编辑模式，内容如下（**注意 4 处需要修改**）：
-
-```ini
+# 创建 .env（把下面内容中的数据库密码换成你实际的密码）
+cat > .env << EOF
 DATABASE_URL=mysql+aiomysql://patient_user:你的密码@localhost:3306/patient_trend?charset=utf8mb4
 DATABASE_ECHO=false
-
-# JWT 密钥：运行下方命令生成随机值，替换下面这个
-SECRET_KEY=把这里换成你生成的密钥
+SECRET_KEY=${SECRET_KEY}
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=10080
 DEBUG=false
+EOF
 ```
 
-**修改说明**：
-
-| 位置 | 怎么改 | 示例 |
-|------|--------|------|
-| `patient_user` | 数据库用户名，保持不动 | `patient_user` |
-| `你的密码` | 改成 2.3 里你设的实际密码 | `MyP@ssw0rd123` |
-| `SECRET_KEY` | 运行下方命令生成，粘贴结果 | `a3f5b2c1d0e9f8...` |
-| localhost | 如果数据库不在本机，改成 MySQL IP | `192.168.1.100` |
-
-**生成 SECRET_KEY**：
+#### 创建前端配置文件
 
 ```bash
-# 终端运行这条命令，复制输出的一长串字符串
-openssl rand -hex 32
+# 开发环境（本地调试）
+cat > frontend/.env.development << EOF
+VITE_API_BASE_URL=/api
+VITE_SERVER_URL=http://localhost:35001
+EOF
+
+# 生产环境（APP 打包 / 公网访问）
+# 把地址改成你的服务器 IP 或域名
+cat > frontend/.env.production << EOF
+VITE_API_BASE_URL=http://你的服务器IP:35001
+EOF
 ```
 
-> 密码里有 `!` `@` 等特殊字符？不用转义，直接填写即可。
-> 
-> 比如密码是 `abc@123!`，写成：`mysql+aiomysql://patient_user:abc@123!@localhost:3306/...`
+#### 安装前端依赖
 
-### 2.6 启动后端
+```bash
+cd /opt/patient-trend/frontend
+npm install
+```
+
+#### 启动服务
 
 ```bash
 cd /opt/patient-trend
-
-# 停止旧进程（如果有）
-pkill -f uvicorn || true
-
-# 启动后端（监听 35001 端口）
-nohup python3.11 -m uvicorn backend.main:app --host 0.0.0.0 --port 35001 --reload > backend.log 2>&1 &
-
-echo "后端 PID: $!"
+bash start.sh
 ```
-
-验证后端是否正常：
-
-```bash
-# 查看日志
-tail -5 backend.log
-```
-
-看到以下输出说明正常：
-
-```
-INFO:     Uvicorn running on http://0.0.0.0:35001
-[migration] Executed 7 new statement(s) from 1 migration file(s)
-```
-
-```bash
-# 用 curl 测试
-curl http://localhost:35001/api/health
-```
-
-返回 `{"status":"ok",...}` 表示成功。
 
 ---
 
 ## 三、前端部署（Linux 服务器）
 
-### 3.1 安装前端依赖
+### 3.1 启动开发服务器（本地调试）
 
 ```bash
-cd /opt/patient-trend/frontend
-npm install
+cd /opt/patient-trend
+bash start.sh
 ```
 
-如果网络慢，切换国内镜像：
-
-```bash
-npm config set registry https://registry.npmmirror.com
-npm install
-```
-
-### 3.2 配置前端 API 地址
-
-前端有两个配置文件，**根据使用场景选一个改**：
-
-| 文件 | 什么时候改 | 用途 |
-|------|-----------|------|
-| `.env.development` | 在 Linux 服务器上本地调试前端 | `npm run dev` 开发服务器 |
-| `.env.production` | 打包 APP / 公网访问 | 构建后访问的后端地址 |
-
-#### 3.2.1 开发服务器配置（在 Linux 服务器上）
-
-```bash
-# 如果文件被 .gitignore 忽略了，需要手动创建
-vi /opt/patient-trend/frontend/.env.development
-```
-
-写入：
-
-```ini
-VITE_API_BASE_URL=/api
-VITE_SERVER_URL=http://localhost:35001
-```
-
-说明：开发服务器会自动把 `/api` 请求转发到 `localhost:35001`，**不需要填后端地址**。
-
-#### 3.2.2 生产环境配置（打包 APP / 公网访问时）
-
-```bash
-vi /opt/patient-trend/frontend/.env.production
-```
-
-写入（**把地址改成你服务器的真实地址和端口**）：
-
-```ini
-VITE_API_BASE_URL=http://你的服务器IP或域名:35001
-```
-
-比如你的服务器是 `www.021897.xyz:35001`：
-
-```ini
-VITE_API_BASE_URL=http://www.021897.xyz:35001
-```
-
-> **重要**：这两个 `.env.*` 文件已被 `.gitignore` 忽略，Git 不会上传。每次新部署或换服务器时都需要手动创建。
-
-### 3.3 启动前端开发服务器
-
-```bash
-cd /opt/patient-trend/frontend
-npm run dev
-```
-
-访问 `http://服务器IP:35000` 就能看到前端。
-
-### 3.4 构建前端（用于打包 APP）
+### 3.2 构建前端（用于打包 APP）
 
 ```bash
 cd /opt/patient-trend/frontend
 
-# 先用生产配置
-vi /opt/patient-trend/frontend/.env.production   # 确认 VITE_API_BASE_URL 已填写
+# 确保 .env.production 中后端地址正确
+
 npm run build
 ```
 
-构建完成后，`frontend/dist/` 目录包含静态文件，可用于生产部署或 APP 打包。
+构建完成后，`frontend/dist/` 目录包含静态文件。
 
 ---
 
@@ -322,67 +246,67 @@ cd patient-trend\frontend
 npm install
 ```
 
-### 4.3 配置后端地址
+### 4.3 用脚本一键打包
 
-APP 需要知道后端在哪。编辑 `.env.production` 文件：
-
-找到文件：`frontend\.env.production`  
-用记事本或 VS Code 打开，写入：
-
-```ini
-VITE_API_BASE_URL=http://你的服务器IP:35001
-```
-
-**比如**：
-```ini
-VITE_API_BASE_URL=http://www.021897.xyz:35001
-```
-
-> 如果服务器是内网 IP，比如 `192.168.1.100`，手机和电脑须在同一 WiFi 下才能访问。
-
-### 4.4 检查 APP 名称
-
-打开 `capacitor.config.ts`，确认以下内容：
-
-```typescript
-const config: CapacitorConfig = {
-  appId: 'com.patient.trend',  // APP 包名（唯一标识）
-  appName: '报告管理',           // APP 名称（显示在手机上）
-  ...
-}
-```
-
-如果想改名字，改 `appName` 即可。
-
-### 4.5 构建并同步到 Android
+PowerShell 中执行：
 
 ```powershell
-cd frontend
+cd C:\Users\你的用户名\Desktop\patient-trend\deploy
+.\build-app-windows.ps1
+```
 
-# 1. 构建前端
+脚本会自动：
+1. 检查 Node.js、Java、Android SDK（缺失时报错并给出下载地址）
+2. 安装前端依赖（失败自动切换淘宝镜像）
+3. 构建前端
+4. 同步到 Android
+5. 打开 Android Studio → 提示你 Build → Build APK(s)
+
+APK 位置：
+```
+frontend\android\app\build\outputs\apk\debug\app-debug.apk
+```
+
+### 4.4 下载项目并手动打包
+
+如果脚本无法运行，按以下步骤手动操作：
+
+打开**命令提示符**（Win + R → 输入 `cmd` → 回车）：
+
+```powershell
+# 1. 下载项目
+cd C:\Users\你的用户名\Desktop
+git clone https://github.com/SealSkyA/patient-trend.git
+cd patient-trend\frontend
+
+# 2. 配置后端地址（用记事本打开 .env.production）
+#    VITE_API_BASE_URL=http://你的服务器IP:35001
+
+# 3. 安装依赖
+npm install
+# 如果失败: npm config set registry https://registry.npmmirror.com
+
+# 4. 构建
 npm run build
 
-# 2. 添加 Android 平台（首次执行需要）
+# 5. 添加 Android 平台（首次执行需要，后续不需要）
 npx cap add android
 
-# 3. 同步前端构建产物到 Android 项目
+# 6. 同步
 npx cap sync android
-```
 
-### 4.6 用 Android Studio 打包 APK
-
-```powershell
-# 用 Android Studio 打开项目
+# 7. 打开 Android Studio
 npx cap open android
 ```
 
-等待 Android Studio 打开项目并完成初始加载（左下角会显示 "Sync 成"）。
+### 4.5 安装打包 APK
 
-#### 6.1 方式一：调试版 APK（快速出包，用于测试）
+在 Android Studio 中：
 
-1. 顶部菜单：**Build** → **Build Bundle(s) / APK(s)** → **Build APK(s)**
-2. 等待底部 Build 窗口显示 "BUILD SUCCESSFUL"
-3. 弹出的 "Open in Explorer" 弹窗直接点击，APK 就在打开的文件夹里
+1. 等待项目加载完成（左下角进度条走完，显示 "Synced"）
+2. 顶部菜单：**Build** → **Build Bundle(s) / APK(s)** → **Build APK(s)**
+3. 等待底部显示 "BUILD SUCCESSFUL"
+4. 弹出的 "Open in Explorer" 直接点击，APK 就在打开的文件夹里
 
 APK 位置通常在：
 ```
@@ -391,7 +315,7 @@ frontend\android\app\build\outputs\apk\debug\app-debug.apk
 
 把 APK 传到手机上，直接安装。
 
-#### 6.2 方式二：正式版 APK（签名、可发应用市场）
+### 4.6 正式版 APK（签名、可发应用市场）
 
 1. 顶部菜单：**Build** → **Generate Signed Bundle / APK**
 2. 选择 **APK** → Next
@@ -460,47 +384,36 @@ npx cap open android
 
 ## 五、运维操作
 
-### 5.1 更新后端代码
+### 5.1 一键更新
 
 ```bash
 cd /opt/patient-trend
-git pull
-
-# 检查是否有新的 pip 依赖
-cd backend && python3.11 -m pip install -r requirements.txt
-
-# 重启后端
-cd /opt/patient-trend
-pkill -f uvicorn || true
-nohup python3.11 -m uvicorn backend.main:app --host 0.0.0.0 --port 35001 --reload > backend.log 2>&1 &
-
-# 查看启动日志
-tail -5 backend.log
+bash start.sh
 ```
 
-### 5.2 更新前端代码
+脚本会自动：
+- 停止旧进程
+- 自动安装新依赖（如有）
+- 启动前后端
+
+### 5.2 查看日志
 
 ```bash
-cd /opt/patient-trend/frontend
-git pull
-npm install
-npm run dev
-```
-
-### 5.3 查看后端日志
-
-```bash
-tail -f /opt/patient-trend/backend.log
+tail -f /opt/patient-trend/logs/backend.log   # 后端
+tail -f /opt/patient-trend/logs/frontend.log  # 前端
 # 按 Ctrl+C 退出
 ```
 
-### 5.4 停止后端
+### 5.3 停止服务
+
+直接 Ctrl+C 退出 `start.sh`，或手动停止：
 
 ```bash
-pkill -f uvicorn
+pkill -f "uvicorn.*backend.main:app"
+pkill -f "npm run dev"
 ```
 
-### 5.5 数据库备份
+### 5.4 数据库备份
 
 ```bash
 mysqldump -u patient_user -p'你的密码' patient_trend > /root/patient_trend_$(date +%Y%m%d).sql
@@ -545,9 +458,20 @@ sudo firewall-cmd --reload
 |------|--------|----------|---------|
 | 1 | MySQL 运行中 | `systemctl status mysqld` | `active (running)` |
 | 2 | 数据库连接 | `mysql -u patient_user -p'密码' patient_trend -e "SHOW TABLES;"` | 列出所有表 |
-| 3 | 后端运行 | `curl http://localhost:35001/api/health` | `{"status":"ok",...}` |
+| 3 | 后端运行 | `curl http://localhost:35001/api/health` | `{"status":"ok"...}` |
 | 4 | 前端运行 | 浏览器打开 `http://服务器IP:35000` | 看到登录页面 |
 | 5 | 后端 API 文档 | 浏览器打开 `http://服务器IP:35001/api/docs` | Swagger 界面 |
-| 6 | 数据库迁移 | `tail -5 backend.log` | 看到 `Executed 7 new statement(s)` |
+| 6 | 数据库迁移 | `tail -5 logs/backend.log` | 看到 `Executed 7 new statement(s)` |
 | 7 | APP 安装 | APK 安装到手机打开 | 能看到登录页面 |
 | 8 | APP 连接 | APP 登录成功 | 能看到首页数据 |
+
+---
+
+## 九、技术栈
+
+| 组件 | 技术选型 |
+|------|---------|
+| 前端 | Vue 3 + TypeScript + Element Plus + ECharts |
+| 后台 | FastAPI + SQLAlchemy (async) + Pydantic |
+| 数据库 | MySQL 8.0+ |
+| 构建工具 | Vite + Capaciotor (Android) |
